@@ -6,4 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1"
+opencv = { version = "0.88", features = ["highgui", "videoio"] }
 tokio = { version = "1", features = ["full"] } # "macros", "net", "rt-multi-thread", "io-util"
