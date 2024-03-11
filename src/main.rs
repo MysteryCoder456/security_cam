@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
             imgproc::resize(
                 &frame,
                 &mut resized_frame,
-                Size::new(1280, 720),
+                Size::new(1024, 576),
                 0.0,
                 0.0,
                 imgproc::INTER_LINEAR,
