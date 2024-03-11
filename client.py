@@ -6,8 +6,10 @@ RECV_BUFFER = 4096
 
 
 def main():
+    server_addr = input("Enter server address: ")
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(("127.0.0.1", 7020))
+    sock.connect((server_addr, 7020))
 
     while True:
         # keep receiving data from socket until all data is received

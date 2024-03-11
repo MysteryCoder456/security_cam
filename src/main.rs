@@ -59,6 +59,10 @@ async fn main() -> anyhow::Result<()> {
             // Capture camera frame
             cam.read(&mut frame).unwrap();
 
+            // Convert color formats
+            let mut rgb_frame = Mat::default();
+            imgproc::cvt_color(&frame, &mut rgb_frame, imgproc::COLOR_BGR2RGB, 0).unwrap();
+
             // Resize to a smaller image
             let mut resized_frame = Mat::default();
             imgproc::resize(
