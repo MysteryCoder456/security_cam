@@ -48,6 +48,8 @@ async fn main() -> anyhow::Result<()> {
     let tx_clone = tx.clone();
     tokio::spawn(async move {
         let mut frame = Mat::default();
+        let mut resized_frame = Mat::default();
+        let mut rgb_frame = Mat::default();
 
         loop {
             tokio::time::sleep(Duration::from_millis(30)).await;
@@ -59,12 +61,7 @@ async fn main() -> anyhow::Result<()> {
             // Capture camera frame
             cam.read(&mut frame).unwrap();
 
-            // Convert color formats
-            let mut rgb_frame = Mat::default();
-            imgproc::cvt_color(&frame, &mut rgb_frame, imgproc::COLOR_BGR2RGB, 0).unwrap();
-
             // Resize to a smaller image
-            let mut resized_frame = Mat::default();
             imgproc::resize(
                 &frame,
                 &mut resized_frame,
@@ -75,12 +72,15 @@ async fn main() -> anyhow::Result<()> {
             )
             .unwrap();
 
+            // Convert color formats
+            imgproc::cvt_color(&resized_frame, &mut rgb_frame, imgproc::COLOR_BGR2RGB, 0).unwrap();
+
             // Encode image to JPEG data
             let mut frame_data = Vector::new();
             let mut params = Vector::<i32>::new();
             params.push(imgcodecs::IMWRITE_JPEG_QUALITY);
             params.push(70);
-            imgcodecs::imencode(".jpg", &resized_frame, &mut frame_data, &params).unwrap();
+            imgcodecs::imencode(".jpg", &rgb_frame, &mut frame_data, &params).unwrap();
 
             // Broadcast to network tasks
             tx_clone.send(frame_data.to_vec()).unwrap();
