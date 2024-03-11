@@ -1,11 +1,16 @@
-use opencv::{core::Vector, imgcodecs, prelude::*, videoio};
+use opencv::{
+    core::{Size, Vector},
+    imgcodecs, imgproc,
+    prelude::*,
+    videoio,
+};
 use std::time::Duration;
-use tokio::{io::AsyncWriteExt, net, sync::broadcast, time::sleep};
+use tokio::{io::AsyncWriteExt, net, sync::broadcast};
 
-type Footage = Vec<u8>;
+type FrameData = Vec<u8>;
 
 async fn broadcast_connection(
-    mut footage_rx: broadcast::Receiver<Footage>,
+    mut footage_rx: broadcast::Receiver<FrameData>,
     mut stream: net::TcpStream,
 ) {
     loop {
@@ -13,7 +18,7 @@ async fn broadcast_connection(
         let footage_data = match footage_rx.recv().await {
             Ok(data) => data,
             Err(e) => {
-                println!("{e:?}");
+                eprintln!("{e:?}");
                 continue;
             }
         };
@@ -37,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let listener = net::TcpListener::bind("0.0.0.0:7020").await?;
-    let (tx, _) = broadcast::channel::<Footage>(1);
+    let (tx, _) = broadcast::channel::<FrameData>(1);
 
     // Spawn data broadcast task
     let tx_clone = tx.clone();
@@ -45,21 +50,36 @@ async fn main() -> anyhow::Result<()> {
         let mut frame = Mat::default();
 
         loop {
-            // Sleep for 33ms to achieve ~30fps
-            sleep(Duration::from_millis(33)).await;
+            tokio::time::sleep(Duration::from_millis(30)).await;
 
-            // Broadcast captured frame to network tasks
-            if tx_clone.receiver_count() > 0 {
-                cam.read(&mut frame).unwrap();
-
-                let mut frame_data = Vector::new();
-                let mut params = Vector::<i32>::new();
-                params.push(imgcodecs::IMWRITE_JPEG_QUALITY);
-                params.push(70);
-
-                imgcodecs::imencode(".jpg", &frame, &mut frame_data, &Vector::new()).unwrap();
-                tx_clone.send(frame_data.to_vec()).unwrap();
+            if tx_clone.receiver_count() < 1 {
+                continue;
             }
+
+            // Capture camera frame
+            cam.read(&mut frame).unwrap();
+
+            // Resize to a smaller image
+            let mut resized_frame = Mat::default();
+            imgproc::resize(
+                &frame,
+                &mut resized_frame,
+                Size::new(1280, 720),
+                0.0,
+                0.0,
+                imgproc::INTER_LINEAR,
+            )
+            .unwrap();
+
+            // Encode image to JPEG data
+            let mut frame_data = Vector::new();
+            let mut params = Vector::<i32>::new();
+            params.push(imgcodecs::IMWRITE_JPEG_QUALITY);
+            params.push(70);
+            imgcodecs::imencode(".jpg", &resized_frame, &mut frame_data, &params).unwrap();
+
+            // Broadcast to network tasks
+            tx_clone.send(frame_data.to_vec()).unwrap();
         }
     });
 
