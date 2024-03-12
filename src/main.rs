@@ -86,7 +86,7 @@ async fn footage_capture(
 
         // Broadcast to network tasks
         //println!("Frame size: {} bytes", frame_data.len());
-        footage_tx.send(frame_data.to_vec()).unwrap();
+        _ = footage_tx.send(frame_data.to_vec());
 
         end = Instant::now();
     }
