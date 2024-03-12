@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CodeBoi's Camera</title>
+</head>
+
+<body>
+    <img id="frame" alt="Camera Footage" width="1280px" height="720px" />
+
+    <script>
+        let frame = document.querySelector("#frame");
+        let ws_proto = "ws";
+
+        if (location.protocol == "https:") {
+            ws_proto = "wss";
+        }
+
+        let ws = new WebSocket(`${ws_proto}://${location.host}/ws`);
+
+        ws.onmessage = function (event) {
+            // Convert binary data to an object URL
+            let url = URL.createObjectURL(event.data);
+            frame.src = url;
+        };
+    </script>
+</body>
+
+</html>

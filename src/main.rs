@@ -9,7 +9,7 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         ConnectInfo, State,
     },
-    response::IntoResponse,
+    response::{Html, IntoResponse},
     routing::get,
     Router,
 };
@@ -92,6 +92,10 @@ async fn footage_capture(
     }
 }
 
+async fn index() -> impl IntoResponse {
+    Html(include_str!("index.html"))
+}
+
 async fn ws_handler(
     ws: WebSocketUpgrade,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -144,8 +148,12 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(footage_capture(tx.clone(), cam));
 
     // Make and serve HTTP server
+    let app = Router::new()
+        .route("/", get(index))
+        .route("/ws", get(ws_handler))
+        .with_state(tx);
+
     let listener = net::TcpListener::bind("0.0.0.0:7020").await?;
-    let app = Router::new().route("/ws", get(ws_handler)).with_state(tx);
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
