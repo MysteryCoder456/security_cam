@@ -1,3 +1,4 @@
+use cfg_if::cfg_if;
 use opencv::{
     core::{Size, Vector},
     imgcodecs, imgproc,
@@ -9,7 +10,9 @@ use tokio::{io::AsyncWriteExt, net, sync::broadcast};
 
 type FrameData = Vec<u8>;
 
-async fn broadcast_connection(
+const MAX_FRAME_RATE: f32 = 30.;
+
+async fn client_connection(
     mut footage_rx: broadcast::Receiver<FrameData>,
     mut stream: net::TcpStream,
 ) {
@@ -34,9 +37,60 @@ async fn broadcast_connection(
     }
 }
 
+async fn footage_capture(footage_tx: broadcast::Sender<FrameData>, mut cam: videoio::VideoCapture) {
+    let mut frame = Mat::default();
+    let mut resized_frame = Mat::default();
+
+    #[cfg(feature = "bgr2rgb")]
+    let mut rgb_frame = Mat::default();
+
+    let mut frame_data = Vector::new();
+    let params = {
+        let mut p = Vector::<i32>::new();
+        p.push(imgcodecs::IMWRITE_JPEG_QUALITY);
+        p.push(70);
+        p
+    };
+
+    loop {
+        tokio::time::sleep(Duration::from_millis((1000. / MAX_FRAME_RATE) as u64)).await;
+
+        if footage_tx.receiver_count() < 1 {
+            continue;
+        }
+
+        // Capture camera frame
+        cam.read(&mut frame).unwrap();
+
+        // Resize to a smaller image
+        imgproc::resize(
+            &frame,
+            &mut resized_frame,
+            Size::new(1024, 576),
+            0.0,
+            0.0,
+            imgproc::INTER_LINEAR,
+        )
+        .unwrap();
+
+        // Convert color formats and encode image
+        cfg_if! {
+            if #[cfg(feature = "bgr2rgb")] {
+                imgproc::cvt_color(&resized_frame, &mut rgb_frame, imgproc::COLOR_BGR2RGB, 0).unwrap();
+                imgcodecs::imencode(".jpg", &rgb_frame, &mut frame_data, &params).unwrap();
+            } else {
+                imgcodecs::imencode(".jpg", &resized_frame, &mut frame_data, &params).unwrap();
+            }
+        }
+
+        // Broadcast to network tasks
+        footage_tx.send(frame_data.to_vec()).unwrap();
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?;
+    let cam = videoio::VideoCapture::new(1, videoio::CAP_ANY)?;
     if !cam.is_opened()? {
         panic!("Unable to open camera!");
     }
@@ -46,46 +100,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Spawn data broadcast task
     let tx_clone = tx.clone();
-    tokio::spawn(async move {
-        let mut frame = Mat::default();
-        let mut resized_frame = Mat::default();
-        let mut rgb_frame = Mat::default();
-
-        loop {
-            tokio::time::sleep(Duration::from_millis(30)).await;
-
-            if tx_clone.receiver_count() < 1 {
-                continue;
-            }
-
-            // Capture camera frame
-            cam.read(&mut frame).unwrap();
-
-            // Resize to a smaller image
-            imgproc::resize(
-                &frame,
-                &mut resized_frame,
-                Size::new(1024, 576),
-                0.0,
-                0.0,
-                imgproc::INTER_LINEAR,
-            )
-            .unwrap();
-
-            // Convert color formats
-            imgproc::cvt_color(&resized_frame, &mut rgb_frame, imgproc::COLOR_BGR2RGB, 0).unwrap();
-
-            // Encode image to JPEG data
-            let mut frame_data = Vector::new();
-            let mut params = Vector::<i32>::new();
-            params.push(imgcodecs::IMWRITE_JPEG_QUALITY);
-            params.push(70);
-            imgcodecs::imencode(".jpg", &rgb_frame, &mut frame_data, &params).unwrap();
-
-            // Broadcast to network tasks
-            tx_clone.send(frame_data.to_vec()).unwrap();
-        }
-    });
+    tokio::spawn(footage_capture(tx_clone, cam));
 
     loop {
         let (sock, addr) = listener.accept().await?;
@@ -93,6 +108,6 @@ async fn main() -> anyhow::Result<()> {
 
         // Spawn new connection task
         let rx = tx.subscribe();
-        tokio::spawn(broadcast_connection(rx, sock));
+        tokio::spawn(client_connection(rx, sock));
     }
 }

@@ -333,6 +333,7 @@ name = "security_cam"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "opencv",
  "tokio",
 ]
