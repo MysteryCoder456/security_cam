@@ -11,6 +11,7 @@ use tokio::{io::AsyncWriteExt, net, sync::broadcast};
 type FrameData = Vec<u8>;
 
 const MAX_FRAME_RATE: f32 = 30.;
+const IMG_FORMAT: &str = ".webp";
 
 async fn client_connection(
     mut footage_rx: broadcast::Receiver<FrameData>,
@@ -47,7 +48,7 @@ async fn footage_capture(footage_tx: broadcast::Sender<FrameData>, mut cam: vide
     let mut frame_data = Vector::new();
     let params = {
         let mut p = Vector::<i32>::new();
-        p.push(imgcodecs::IMWRITE_JPEG_QUALITY);
+        p.push(imgcodecs::IMWRITE_WEBP_QUALITY);
         p.push(70);
         p
     };
@@ -77,20 +78,21 @@ async fn footage_capture(footage_tx: broadcast::Sender<FrameData>, mut cam: vide
         cfg_if! {
             if #[cfg(feature = "bgr2rgb")] {
                 imgproc::cvt_color(&resized_frame, &mut rgb_frame, imgproc::COLOR_BGR2RGB, 0).unwrap();
-                imgcodecs::imencode(".jpg", &rgb_frame, &mut frame_data, &params).unwrap();
+                imgcodecs::imencode(IMG_FORMAT, &rgb_frame, &mut frame_data, &params).unwrap();
             } else {
-                imgcodecs::imencode(".jpg", &resized_frame, &mut frame_data, &params).unwrap();
+                imgcodecs::imencode(IMG_FORMAT, &resized_frame, &mut frame_data, &params).unwrap();
             }
         }
 
         // Broadcast to network tasks
+        println!("Frame size: {} bytes", frame_data.len());
         footage_tx.send(frame_data.to_vec()).unwrap();
     }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let cam = videoio::VideoCapture::new(1, videoio::CAP_ANY)?;
+    let cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?;
     if !cam.is_opened()? {
         panic!("Unable to open camera!");
     }
