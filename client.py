@@ -2,7 +2,7 @@ import socket
 import cv2
 import numpy as np
 
-RECV_BUFFER = 4096
+RECV_BUFFER = 1024
 
 
 def main():
