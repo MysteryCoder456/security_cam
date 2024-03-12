@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
+axum = { version = "0.7", features = ["ws"] }
 cfg-if = "1"
 opencv = { version = "0.88", features = ["videoio"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "io-util", "sync", "time"] }

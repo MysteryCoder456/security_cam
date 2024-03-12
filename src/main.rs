@@ -1,3 +1,18 @@
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+use axum::{
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        ConnectInfo, State,
+    },
+    response::IntoResponse,
+    routing::get,
+    Router,
+};
 use cfg_if::cfg_if;
 use opencv::{
     core::{Size, Vector},
@@ -5,40 +20,17 @@ use opencv::{
     prelude::*,
     videoio,
 };
-use std::time::Duration;
-use tokio::{io::AsyncWriteExt, net, sync::broadcast};
+use tokio::{net, sync::broadcast};
 
 type FrameData = Vec<u8>;
 
 const MAX_FRAME_RATE: f32 = 30.;
 const IMG_FORMAT: &str = ".webp";
 
-async fn client_connection(
-    mut footage_rx: broadcast::Receiver<FrameData>,
-    mut stream: net::TcpStream,
+async fn footage_capture(
+    footage_tx: Arc<broadcast::Sender<FrameData>>,
+    mut cam: videoio::VideoCapture,
 ) {
-    loop {
-        // Receive broadcasted footage data...
-        let footage_data = match footage_rx.recv().await {
-            Ok(data) => data,
-            Err(e) => {
-                eprintln!("{e:?}");
-                continue;
-            }
-        };
-
-        // ...and send it down to client
-        match stream.write_all(&footage_data).await {
-            Ok(()) => {}
-            Err(_) => {
-                println!("Client disconnected");
-                break;
-            }
-        }
-    }
-}
-
-async fn footage_capture(footage_tx: broadcast::Sender<FrameData>, mut cam: videoio::VideoCapture) {
     let mut frame = Mat::default();
     let mut resized_frame = Mat::default();
 
@@ -53,12 +45,20 @@ async fn footage_capture(footage_tx: broadcast::Sender<FrameData>, mut cam: vide
         p
     };
 
+    let mut start = Instant::now();
+    let mut end = Instant::now();
+
     loop {
-        tokio::time::sleep(Duration::from_millis((1000. / MAX_FRAME_RATE) as u64)).await;
+        tokio::time::sleep(Duration::from_millis(
+            (1000. / MAX_FRAME_RATE - (end - start).as_millis() as f32) as u64,
+        ))
+        .await;
 
         if footage_tx.receiver_count() < 1 {
             continue;
         }
+
+        start = Instant::now();
 
         // Capture camera frame
         cam.read(&mut frame).unwrap();
@@ -85,31 +85,72 @@ async fn footage_capture(footage_tx: broadcast::Sender<FrameData>, mut cam: vide
         }
 
         // Broadcast to network tasks
-        println!("Frame size: {} bytes", frame_data.len());
+        //println!("Frame size: {} bytes", frame_data.len());
         footage_tx.send(frame_data.to_vec()).unwrap();
+
+        end = Instant::now();
     }
+}
+
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(footage_tx): State<Arc<broadcast::Sender<FrameData>>>,
+) -> impl IntoResponse {
+    let rx = footage_tx.subscribe();
+    ws.on_upgrade(move |sock| client_handler(sock, addr, rx))
+}
+
+async fn client_handler(
+    mut socket: WebSocket,
+    addr: SocketAddr,
+    mut footage_rx: broadcast::Receiver<FrameData>,
+) {
+    println!("New connection from {:?}", addr);
+
+    loop {
+        tokio::select! {
+            Ok(footage_data) = footage_rx.recv() => {
+                match socket.send(Message::Binary(footage_data)).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        eprintln!("Client {addr:?}: {e:?}");
+                        break;
+                    }
+                }
+            },
+            Some(Ok(msg)) = socket.recv() => {
+                match msg {
+                    Message::Close(_) => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    println!("Client {addr:?} disconnected");
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?;
+    let cam = videoio::VideoCapture::new(1, videoio::CAP_ANY)?;
     if !cam.is_opened()? {
         panic!("Unable to open camera!");
     }
 
-    let listener = net::TcpListener::bind("0.0.0.0:7020").await?;
+    // Spawn footage capture task
     let (tx, _) = broadcast::channel::<FrameData>(1);
+    let tx = Arc::new(tx);
+    tokio::spawn(footage_capture(tx.clone(), cam));
 
-    // Spawn data broadcast task
-    let tx_clone = tx.clone();
-    tokio::spawn(footage_capture(tx_clone, cam));
+    // Make and serve HTTP server
+    let listener = net::TcpListener::bind("0.0.0.0:7020").await?;
+    let app = Router::new().route("/ws", get(ws_handler)).with_state(tx);
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
-    loop {
-        let (sock, addr) = listener.accept().await?;
-        println!("New connection from {:?}", addr);
-
-        // Spawn new connection task
-        let rx = tx.subscribe();
-        tokio::spawn(client_connection(rx, sock));
-    }
+    Ok(())
 }
