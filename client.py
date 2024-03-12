@@ -1,3 +1,5 @@
+### Demo client script. NOT meant to be used in production.
+
 import cv2
 import numpy as np
 from websockets.sync.client import connect
