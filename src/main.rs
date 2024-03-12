@@ -133,7 +133,7 @@ async fn client_handler(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let cam = videoio::VideoCapture::new(1, videoio::CAP_ANY)?;
+    let cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?;
     if !cam.is_opened()? {
         panic!("Unable to open camera!");
     }
