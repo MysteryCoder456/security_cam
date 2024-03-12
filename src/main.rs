@@ -85,7 +85,7 @@ async fn footage_capture(footage_tx: broadcast::Sender<FrameData>, mut cam: vide
         }
 
         // Broadcast to network tasks
-        println!("Frame size: {} bytes", frame_data.len());
+        //println!("Frame size: {} bytes", frame_data.len());
         footage_tx.send(frame_data.to_vec()).unwrap();
     }
 }
