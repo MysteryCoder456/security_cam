@@ -135,7 +135,7 @@ async fn client_handler(
     println!("Client {addr:?} disconnected");
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     let cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?;
     if !cam.is_opened()? {
