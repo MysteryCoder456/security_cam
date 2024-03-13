@@ -27,10 +27,7 @@ type FrameData = Vec<u8>;
 const MAX_FRAME_RATE: f32 = 30.;
 const IMG_FORMAT: &str = ".webp";
 
-async fn footage_capture(
-    footage_tx: Arc<broadcast::Sender<FrameData>>,
-    mut cam: videoio::VideoCapture,
-) {
+fn footage_capture(footage_tx: Arc<broadcast::Sender<FrameData>>, mut cam: videoio::VideoCapture) {
     let mut frame = Mat::default();
     let mut resized_frame = Mat::default();
 
@@ -49,10 +46,9 @@ async fn footage_capture(
     let mut end = Instant::now();
 
     loop {
-        tokio::time::sleep(Duration::from_millis(
+        std::thread::sleep(Duration::from_millis(
             (1000. / MAX_FRAME_RATE - (end - start).as_millis() as f32) as u64,
-        ))
-        .await;
+        ));
 
         if footage_tx.receiver_count() < 1 {
             continue;
@@ -145,7 +141,10 @@ async fn main() -> anyhow::Result<()> {
     // Spawn footage capture task
     let (tx, _) = broadcast::channel::<FrameData>(1);
     let tx = Arc::new(tx);
-    tokio::spawn(footage_capture(tx.clone(), cam));
+    let tx_clone = tx.clone();
+    tokio::task::spawn_blocking(move || {
+        footage_capture(tx_clone, cam);
+    });
 
     // Make and serve HTTP server
     let app = Router::new()
