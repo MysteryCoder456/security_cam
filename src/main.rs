@@ -108,9 +108,9 @@ async fn servo_task(mut servo_rx: mpsc::UnboundedReceiver<ServoPosition>, servo_
     loop {
         while let Some(servo_pos) = servo_rx.recv().await {
             let pulse_width = match servo_pos {
-                ServoPosition::Left => MIN_PULSE_WIDTH_US,
+                ServoPosition::Left => MAX_PULSE_WIDTH_US,
                 ServoPosition::Center => (MAX_PULSE_WIDTH_US + MIN_PULSE_WIDTH_US) / 2,
-                ServoPosition::Right => MAX_PULSE_WIDTH_US,
+                ServoPosition::Right => MIN_PULSE_WIDTH_US,
                 ServoPosition::Custom(pos) => {
                     ((pos * (MAX_PULSE_WIDTH_US - MIN_PULSE_WIDTH_US) as f32 / 2.)
                         + (MAX_PULSE_WIDTH_US + MIN_PULSE_WIDTH_US) as f32 / 2.)
