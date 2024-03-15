@@ -8,22 +8,24 @@
 </head>
 
 <body>
-    <img id="frame" alt="Camera Footage" width="1280px" height="720px" />
+    <img id="frame" alt="Camera Footage" width="1024px" height="auto" />
+    <input type="range" min="-1" max="1" value="0" id="pan-control" />
 
     <script>
         let frame = document.querySelector("#frame");
-        let ws_proto = "ws";
+        let panControl = document.querySelector("#pan-control");
 
-        if (location.protocol == "https:") {
-            ws_proto = "wss";
-        }
-
+        let ws_proto = location.protocol == "https:" ? "wss" : "ws";
         let ws = new WebSocket(`${ws_proto}://${location.host}/ws`);
 
         ws.onmessage = function (event) {
             // Convert binary data to an object URL
             let url = URL.createObjectURL(event.data);
             frame.src = url;
+        };
+
+        panControl.oninput = function (event) {
+            ws.send(event.target.value);
         };
     </script>
 </body>
