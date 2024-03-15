@@ -10,6 +10,7 @@ anyhow = "1"
 axum = { version = "0.7", features = ["ws"] }
 cfg-if = "1"
 opencv = { version = "0.88", features = ["videoio"] }
+rppal = { version = "0.17", features = ["hal"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "io-util", "sync", "time"] }
 
 [features]
