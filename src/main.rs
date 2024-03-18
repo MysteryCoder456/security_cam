@@ -118,6 +118,7 @@ fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
         ));
 
         if footage_tx.receiver_count() < 1 {
+            std::thread::sleep(Duration::from_secs(1));
             continue;
         }
 
