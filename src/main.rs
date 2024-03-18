@@ -14,6 +14,7 @@ use axum::{
     routing::get,
     Router,
 };
+use drm_fourcc::DrmFourcc;
 use image::{ImageBuffer, ImageFormat, RgbImage};
 use libcamera::{
     camera::CameraConfigurationStatus,
@@ -41,11 +42,10 @@ enum ServoPosition {
 }
 
 const MAX_FRAME_RATE: f32 = 30.;
-const PIXEL_FORMAT: PixelFormat = PixelFormat::new(u32::from_le_bytes([b'B', b'G', b'2', b'4']), 0);
+const PIXEL_FORMAT: PixelFormat = PixelFormat::new(DrmFourcc::Bgr888 as u32, 0);
 const MAX_PULSE_WIDTH_US: u64 = 2000;
 const MIN_PULSE_WIDTH_US: u64 = 1000;
 
-// FIXME: Video streaming is a lot faster, but results in some blank frames
 fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
     // Initialize camera
     let cam_mgr = CameraManager::new().unwrap();
@@ -53,8 +53,8 @@ fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
     let cam = cameras.get(0).unwrap();
     let mut cam = cam.acquire().unwrap();
     let size = Size {
-        width: 640,
-        height: 480,
+        width: 1024,
+        height: 768,
     };
 
     // Configure camera
@@ -132,7 +132,7 @@ fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
 
         let img: RgbImage =
             ImageBuffer::from_raw(size.width, size.height, frame_data.to_vec()).unwrap();
-        img.write_to(&mut Cursor::new(&mut converted_bytes), ImageFormat::WebP)
+        img.write_to(&mut Cursor::new(&mut converted_bytes), ImageFormat::Jpeg)
             .unwrap();
 
         _ = footage_tx.send(converted_bytes.clone());
