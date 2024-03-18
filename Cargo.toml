@@ -8,11 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 axum = { version = "0.7", features = ["ws"] }
-cfg-if = "1"
-opencv = { version = "0.88", features = ["videoio"] }
+image = { version = "0.25", default-features = false, features = ["webp"] }
+libcamera = "0.2"
 rppal = { version = "0.17", features = ["hal"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "io-util", "sync", "time"] }
-
-[features]
-default = []
-bgr2rgb = []
