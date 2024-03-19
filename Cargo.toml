@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.7", default-features = false, features = ["http2", "ws"] }
 drm-fourcc = "2.2"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 libcamera = "0.2"
