@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     extract::{
@@ -9,45 +9,16 @@ use axum::{
     routing::get,
     Router,
 };
-use rppal::pwm;
 use tokio::{
     net,
     sync::{broadcast, mpsc},
 };
 
 use crate::footage::{footage_capture_task, FrameData};
+use crate::servo::{initilize_servo, servo_task, ServoPosition};
 
 mod footage;
-
-enum ServoPosition {
-    Left,
-    Center,
-    Right,
-    Custom(f32),
-}
-
-const MAX_PULSE_WIDTH_US: u64 = 2000;
-const MIN_PULSE_WIDTH_US: u64 = 1000;
-
-async fn servo_task(mut servo_rx: mpsc::UnboundedReceiver<ServoPosition>, servo_pwm: pwm::Pwm) {
-    loop {
-        while let Some(servo_pos) = servo_rx.recv().await {
-            let pulse_width = match servo_pos {
-                ServoPosition::Left => MAX_PULSE_WIDTH_US,
-                ServoPosition::Center => (MAX_PULSE_WIDTH_US + MIN_PULSE_WIDTH_US) / 2,
-                ServoPosition::Right => MIN_PULSE_WIDTH_US,
-                ServoPosition::Custom(pos) => {
-                    ((pos * (MAX_PULSE_WIDTH_US - MIN_PULSE_WIDTH_US) as f32 / 2.)
-                        + (MAX_PULSE_WIDTH_US + MIN_PULSE_WIDTH_US) as f32 / 2.)
-                        as u64
-                }
-            };
-            servo_pwm
-                .set_pulse_width(Duration::from_micros(pulse_width))
-                .unwrap();
-        }
-    }
-}
+mod servo;
 
 async fn index() -> impl IntoResponse {
     Html(include_str!("index.html"))
@@ -112,13 +83,7 @@ async fn client_handler(
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     // Initialize PWM servo
-    let servo_pwm = pwm::Pwm::with_period(
-        pwm::Channel::Pwm0,
-        Duration::from_millis(20),
-        Duration::from_micros((MAX_PULSE_WIDTH_US + MIN_PULSE_WIDTH_US) / 2),
-        pwm::Polarity::Normal,
-        true,
-    )?;
+    let servo_pwm = initilize_servo()?;
 
     // Spawn footage capture task
     let (footage_tx, _) = broadcast::channel::<FrameData>(1);
