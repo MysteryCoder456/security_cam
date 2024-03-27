@@ -13,8 +13,8 @@ use libcamera::{
     framebuffer_map::MemoryMappedFrameBuffer,
     geometry::Size,
     pixel_format::PixelFormat,
-    request::ReuseFlag,
-    stream::StreamRole,
+    request::{Request, ReuseFlag},
+    stream::{Stream, StreamRole},
 };
 use tokio::sync::broadcast;
 
@@ -22,6 +22,17 @@ pub type FrameData = Vec<u8>;
 
 const MAX_FRAME_RATE: f32 = 30.;
 const PIXEL_FORMAT: PixelFormat = PixelFormat::new(DrmFourcc::Bgr888 as u32, 0);
+const FRAME_SIZE: Size = Size {
+    width: 1024,
+    height: 768,
+};
+
+fn extract_image_from_request(request: &mut Request, camera_stream: &Stream) -> RgbImage {
+    let framebuffer: &MemoryMappedFrameBuffer<FrameBuffer> = request.buffer(camera_stream).unwrap();
+    let planes = framebuffer.data();
+    let frame_data = planes.get(0).unwrap();
+    ImageBuffer::from_raw(FRAME_SIZE.width, FRAME_SIZE.height, frame_data.to_vec()).unwrap()
+}
 
 pub fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
     // Initialize camera
@@ -29,17 +40,13 @@ pub fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
     let cameras = cam_mgr.cameras();
     let cam = cameras.get(0).unwrap();
     let mut cam = cam.acquire().unwrap();
-    let size = Size {
-        width: 1024,
-        height: 768,
-    };
 
     // Configure camera
     let mut cfgs = cam
         .generate_configuration(&[StreamRole::VideoRecording])
         .unwrap();
     cfgs.get_mut(0).unwrap().set_pixel_format(PIXEL_FORMAT);
-    cfgs.get_mut(0).unwrap().set_size(size);
+    cfgs.get_mut(0).unwrap().set_size(FRAME_SIZE);
 
     match cfgs.validate() {
         CameraConfigurationStatus::Valid => println!("Camera configuration valid!"),
@@ -73,6 +80,7 @@ pub fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
         })
         .collect::<Vec<_>>();
 
+    // Create request completion callback
     let (req_tx, req_rx) = std::sync::mpsc::channel();
     cam.on_request_completed(move |req| {
         req_tx.send(req).unwrap();
@@ -84,8 +92,7 @@ pub fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
         cam.queue_request(req).unwrap();
     }
 
-    let mut converted_bytes = Vec::new();
-
+    let mut img_bytes = Vec::new();
     let mut start = Instant::now();
     let mut end = Instant::now();
 
@@ -101,20 +108,16 @@ pub fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
 
         start = Instant::now();
 
+        // Receive capture request and extract image from it
         let mut req = req_rx.recv().unwrap();
+        let img = extract_image_from_request(&mut req, &stream);
 
-        let framebuffer: &MemoryMappedFrameBuffer<FrameBuffer> = req.buffer(&stream).unwrap();
-        let planes = framebuffer.data();
-
-        let frame_data = planes.get(0).unwrap();
-
-        let img: RgbImage =
-            ImageBuffer::from_raw(size.width, size.height, frame_data.to_vec()).unwrap();
-        img.write_to(&mut Cursor::new(&mut converted_bytes), ImageFormat::Jpeg)
+        // Write image bytes to a vector and broadcast
+        img.write_to(&mut Cursor::new(&mut img_bytes), ImageFormat::Jpeg)
             .unwrap();
+        _ = footage_tx.send(img_bytes.clone());
 
-        _ = footage_tx.send(converted_bytes.clone());
-
+        // Reuse request
         req.reuse(ReuseFlag::REUSE_BUFFERS);
         cam.queue_request(req).unwrap();
 
