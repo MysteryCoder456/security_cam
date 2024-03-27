@@ -13,6 +13,7 @@ use tokio::{
     net,
     sync::{broadcast, mpsc},
 };
+use tower_http::{compression::CompressionLayer, CompressionLevel};
 
 use crate::footage::{footage_capture_task, FrameData};
 use crate::servo::{initilize_servo, servo_task, ServoPosition};
@@ -99,6 +100,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Make and serve HTTP server
     let app = Router::new()
+        .layer(CompressionLayer::new().zstd(true))
         .route("/", get(index))
         .route("/ws", get(ws_handler))
         .with_state((footage_tx, servo_tx));

@@ -8,8 +8,9 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 axum = { version = "0.7", default-features = false, features = ["http2", "ws"] }
+tower-http = { version = "0.5", default-features = false, features = ["compression-zstd"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 drm-fourcc = "2.2"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 libcamera = "0.2"
 rppal = { version = "0.17", features = ["hal"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
