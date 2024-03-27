@@ -5,7 +5,7 @@ use std::{
 };
 
 use drm_fourcc::DrmFourcc;
-use image::{ImageBuffer, ImageFormat, RgbImage};
+use image::{codecs::jpeg::JpegEncoder, ImageBuffer, RgbImage};
 use libcamera::{
     camera::CameraConfigurationStatus,
     camera_manager::CameraManager,
@@ -20,7 +20,7 @@ use tokio::sync::broadcast;
 
 pub type FrameData = Vec<u8>;
 
-const MAX_FRAME_RATE: f32 = 30.;
+const MAX_FRAME_RATE: f32 = 24.;
 const PIXEL_FORMAT: PixelFormat = PixelFormat::new(DrmFourcc::Bgr888 as u32, 0);
 const FRAME_SIZE: Size = Size {
     width: 1024,
@@ -113,8 +113,8 @@ pub fn footage_capture_task(footage_tx: Arc<broadcast::Sender<FrameData>>) {
         let img = extract_image_from_request(&mut req, &stream);
 
         // Write image bytes to a vector and broadcast
-        img.write_to(&mut Cursor::new(&mut img_bytes), ImageFormat::Jpeg)
-            .unwrap();
+        let encoder = JpegEncoder::new_with_quality(Cursor::new(&mut img_bytes), 50);
+        img.write_with_encoder(encoder).unwrap();
         _ = footage_tx.send(img_bytes.clone());
 
         // Reuse request
