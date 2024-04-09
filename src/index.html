@@ -21,6 +21,7 @@
 
         ws.onmessage = function (event) {
             // Convert binary data to an object URL
+            URL.revokeObjectURL(frame.src);
             let url = URL.createObjectURL(event.data);
             frame.src = url;
         };
