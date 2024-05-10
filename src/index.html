@@ -1,53 +1,58 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CodeBoi's Camera</title>
+    <style>
+      img {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        inset: 0;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+        object-position: center;
+      }
 
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>CodeBoi's Camera</title>
-	<style>
-		img {
-			width: 100%;
-			height: 100%;
-			position: absolute;
-			inset: 0;
-			aspect-ratio: 16 / 9;
-			object-fit: cover;
-			object-position: center;
-		}
+      input {
+        position: absolute;
+        bottom: 1rem;
+        left: 1rem;
+        z-index: 10;
+      }
+    </style>
+  </head>
 
-		input {
-			position: absolute;
-			bottom: 1rem;
-			left: 1rem;
-			z-index: 10;
-		}
-	</style>
-</head>
+  <body>
+    <img id="frame" alt="Camera Footage" />
+    <br />
+    <input
+      type="range"
+      min="-1"
+      max="1"
+      value="0"
+      step="0.01"
+      id="pan-control"
+    />
 
-<body>
-	<img id="frame" alt="Camera Footage" />
-	<br>
-	<input type="range" min="-1" max="1" value="0" step="0.01" id="pan-control" />
+    <script>
+      let frame = document.querySelector("#frame");
+      let panControl = document.querySelector("#pan-control");
 
-	<script>
-		let frame = document.querySelector("#frame");
-		let panControl = document.querySelector("#pan-control");
+      let ws_proto = location.protocol == "https:" ? "wss" : "ws";
+      let ws = new WebSocket(`${ws_proto}://${location.host}/ws`);
 
-		let ws_proto = location.protocol == "https:" ? "wss" : "ws";
-		let ws = new WebSocket(`${ws_proto}://${location.host}/ws`);
+      ws.onmessage = function (event) {
+        // Convert binary data to an object URL
+        URL.revokeObjectURL(frame.src);
+        let url = URL.createObjectURL(event.data);
+        frame.src = url;
+      };
 
-		ws.onmessage = function (event) {
-			// Convert binary data to an object URL
-			URL.revokeObjectURL(frame.src);
-			let url = URL.createObjectURL(event.data);
-			frame.src = url;
-		};
-
-		panControl.oninput = function (event) {
-			ws.send(-event.target.value);
-		};
-	</script>
-</body>
-
+      panControl.oninput = function (event) {
+        ws.send(-event.target.value);
+      };
+    </script>
+  </body>
 </html>
