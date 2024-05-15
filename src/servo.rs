@@ -10,7 +10,7 @@ pub enum ServoPosition {
     Custom(f32),
 }
 
-const GPIO_PWM: u8 = 23;
+const GPIO_PWM: u8 = 18;
 const PERIOD_MS: u64 = 20;
 const MAX_PULSE_WIDTH_US: u64 = 2000;
 const MIN_PULSE_WIDTH_US: u64 = 1000;
