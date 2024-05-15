@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use rppal::pwm;
+use rppal::gpio;
 use tokio::sync::mpsc;
 
 pub enum ServoPosition {
@@ -10,20 +10,24 @@ pub enum ServoPosition {
     Custom(f32),
 }
 
+const GPIO_PWM: u8 = 23;
+const PERIOD_MS: u64 = 20;
 const MAX_PULSE_WIDTH_US: u64 = 2000;
 const MIN_PULSE_WIDTH_US: u64 = 1000;
 
-pub fn initilize_servo() -> pwm::Result<pwm::Pwm> {
-    pwm::Pwm::with_period(
-        pwm::Channel::Pwm0,
-        Duration::from_millis(20),
-        Duration::from_micros((MAX_PULSE_WIDTH_US + MIN_PULSE_WIDTH_US) / 2),
-        pwm::Polarity::Normal,
-        true,
-    )
+pub fn initilize_servo() -> gpio::Result<gpio::OutputPin> {
+    let mut pin = gpio::Gpio::new()?.get(GPIO_PWM)?.into_output();
+    pin.set_pwm(
+        Duration::from_millis(PERIOD_MS),
+        Duration::from_micros((MIN_PULSE_WIDTH_US + MAX_PULSE_WIDTH_US) / 2),
+    )?;
+    Ok(pin)
 }
 
-pub async fn servo_task(mut servo_rx: mpsc::UnboundedReceiver<ServoPosition>, servo_pwm: pwm::Pwm) {
+pub async fn servo_task(
+    mut servo_rx: mpsc::UnboundedReceiver<ServoPosition>,
+    mut servo_pwm: gpio::OutputPin,
+) {
     loop {
         while let Some(servo_pos) = servo_rx.recv().await {
             let pulse_width = match servo_pos {
@@ -37,7 +41,10 @@ pub async fn servo_task(mut servo_rx: mpsc::UnboundedReceiver<ServoPosition>, se
                 }
             };
             servo_pwm
-                .set_pulse_width(Duration::from_micros(pulse_width))
+                .set_pwm(
+                    Duration::from_millis(PERIOD_MS),
+                    Duration::from_micros(pulse_width),
+                )
                 .unwrap();
         }
     }
