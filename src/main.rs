@@ -49,7 +49,7 @@ async fn client_handler(
     loop {
         tokio::select! {
             Ok(footage_data) = footage_rx.recv() => {
-                match socket.send(Message::Binary(footage_data)).await {
+                match socket.send(Message::Binary(footage_data.into())).await {
                     Ok(()) => {}
                     Err(e) => {
                         eprintln!("Client {addr:?}: {e:?}");
