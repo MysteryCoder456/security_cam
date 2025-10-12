@@ -105,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/ws", get(ws_handler))
         .with_state((footage_tx, servo_tx));
 
-    let listener = net::TcpListener::bind("0.0.0.0:7020").await?;
+    let listener = net::TcpListener::bind("127.0.0.1:7020").await?;
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
