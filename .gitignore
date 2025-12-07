@@ -55,3 +55,4 @@ CMakeUserPresets.json
 
 .DS_Store
 env/
+build/
